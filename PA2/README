@@ -1,0 +1,33 @@
+CIOTEC MARIAN-STEFAN 323CA
+TEMA 2 - FOTBAL PE HARTIE
+
+
+Pentru a reprezenta terenul(clasa Pitch) am folosit o matrice bidimensionala, fiecare element
+al matricei retinand anumite informatii despre fiecare punct din teren(clasa Position). Fiecare
+pozitie de pe teren este descisa de opt directii in care se poate merge(vectorul direction) si
+de alte variabile boolene care vrifica daca este margine, colt sau punct din poarta pozitia
+respectiva.
+
+In clasa Pitch, variabila current_pos retine pozitia curenta in care se afla jocul pe teren. La
+inceput current_pos este initializat la (6,4), urmand ca apoi sa se modifice in functie de 
+mutarile pe care jucatorii le fac. Functia markTowards marcheaza o directie dintr-un anumit punct
+ca fiind inaccesibila si deasemenea directia din viitorul punct spre punctul curent la fel, actualizand
+si pozitia curenta a jocului.
+
+Pentru gasirea celei mai bune mutari la un anumit moment am folosit un algoritm de timpul minimax.
+In functia findNextMove verific daca pozitia din directia in care voi muta a mai fost marcata. In caz
+afirmativ, apelez max incercand tot sa-mi maximizez castigul, in caz contrar apelez min. Cand se gaseste
+o mutare buna, este retinuta. Acceasi idee si in functiile max si min, in cazul in care pozitia viitoare
+a mai fost marcata sau este margine voi apela tot max, respectiv min(este tot randul meu sa mut), altfel
+incerc sa minimizez, respectiv sa maximizez rezultatul(urmand adversarul). Prin apelul functiei
+teren.markTowards(opposite(dir), true), refac calea prin care am mers la iesirea din apelul functiilor
+min sau max. Apelul recursiv se opreste in momentul in care s-a marcat gol sau s-a ajuns la MAXDEPTH.
+
+Functia de euristica este folosita pentru a acorda un anumit punctaj pozitiilor de pe teren in care s-a
+ajuns. Cu cat pozitia este mai aproape de poarta adversarului, cu atat ii este atribuit un scor mai mare.
+De asemenea, puctelor de pe margine le este atribuit un puctaj mai mare decat punctelor de pe linia imediat
+de langa margine, pentru ca daca s-ar muta acolo adversarul ar urma sa faca cel putin doua mutari. Punctelor
+din fata portii mele le este atribuit un scor foarte prost, pentru ca daca as muta acolo adversarul cu 
+siguranta imi va marca gol din doua mutari, ca si barelor portii mele, atunci luand gol dintr-o singura
+mutare. Contrar, barele adversarului au un punctaj foarte mare pentru ca ar urma sa marchez gol in caz
+ca as lovi bara.
