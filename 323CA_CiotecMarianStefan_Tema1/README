@@ -1,0 +1,116 @@
+CIOTEC MARIAN-STEFAN 323CA
+* PC, Tema1 *
+
+
+Compilare: make
+Pornire + verificare transfer: ./run_experiment.sh
+
+Unităti de măsură pentru parametrii din script:
+	* SPEED: Mb/s
+	* DELAY: ms
+	* LOSS: procentaj cadre pierdute
+	* CORRUPT: procentaj cadre corupte
+
+Domeniu de valori:
+	* SPEED = 5 .. 20 Mb/s
+	* DELAY = 10 ... 1000 ms
+	* LOSS = 0 ... 10 %
+	* CORRUPT = 0 .. 10% / 100 %
+	* TASK_INDEX = 0, 1, 2, 3 și 4
+
+Pentru task-urile 0, 1, 2 am creat o structura ajutatoare, my_pkt care
+retine tipul unui mesaj trimis(campul type), numarul de secventa al
+acestuia(campul sequence) si informatia efectiva(campul payload).
+Numele fisierului si marimea ferestrei le trimit in primul pachet,
+retrimitandu-le daca acestea nu au ajuns la receiver pana frame-ul
+ajunge.
+Numarul de cadre pe care receiver-ul trebuie sa le astepte este trimis in
+al doilea mesaj, care la fel ca si primul, este trimis pana ajunge cu bine.
+
+
+	
+Task 0
+
+In sender am umplut fereastra cu un numar de cadre egal cu dimensiuna 
+acesteia si apoi am asteptat confirmare de la receiver. Pentru fiecare cadru
+confirmat, inca unul nou este trimis de catre sender.
+In receiver, deoarece cadrele nu se pot pierde, pentru fiecare cadru trimis
+am trimis confirmare inapoi la sender.
+
+
+
+Task 1
+
+In sender am umplut fereastra cu un numar de cadre egal cu dimensiunea 
+acesteia, de data acesta cadrele inca neconfirmate fiind memorate si intr-un
+buffer de dimensiunea ferestrei(buf_frame). ACK-urile sunt asteptate cu
+functia recv_message_timeout. Variabila ack_expected retine ack-ul care
+valid care ar trebui primit de la receiver. In cazul in care ack_expected
+corespunde cu ack-ul trimis de sender(vor corespunde mereu deoarece receiverul
+trimite ack numai pentru cadrele primite corect, altfel se intra in timeout),
+dimensiunea bufferului(buf_size) este redusa cu 1 pentru a trimite un nou frame.
+In cazul in care timeout-ul expira este retrimisa o intreaga fereastra de frame-uri,
+retinuta in buf_frame.
+In receiver se trimit ACK-uri numai daca ajunge cadrul asteptat, in caz contrat se intra
+intr-o bucla pana timeout-ul din sender expira si sunt retrimise cadrele incepand cu cel
+pierdut.
+
+
+
+Task 2
+
+In sender, fata de task-ul 1, exista si un vector de int-uri, frame_ack[no_of_frames],
+care retine daca pentru un anumit frame a ajuns confirmare de la receiver. La fel ca si la
+primele doua task-uri este umpluta fereastra, de data acesta marcand fiecare frame cu NACK
+(inca nu se stie nimic despre el). Un frame este marcat cu ACK cand s-a primit confirmare de
+la receiver. Variabila ack_received reprezinta ACK-ul primit iar ack_expected ACK-ul asteptat. 
+Variabila nack_no retine cate frame-uri s-au pierdut pana la un anumit moment. In cazul in care 
+ack_expected corespunde cu ack_received si nu s-a pierdut nicun frame din cele trimise,
+atunci se poate trimite un nou cadru. In cazul in care cele doua corespund dar s-au pierdut
+cadre inaintea lor, atunci dimensiunea ferestrei nu se va mari(nu trimit un nou frame), ci astept
+ca pentru ultimul frame trimis sa ajunga confirmare, iar atunci retrimit toate cadrele pierdute
+pana la ultimul trimis. Odata ce a ajuns primul cadru retrimis, trimit un numar de cadre pana
+la ultimul netrimis.
+In receiver, fiecare frame ajuns care corespunde cu cel asteptat(frame_expected == frame_received)
+este scris in fisier. Daca ajunge un alt frame, atunci este retinut in buffer, iar cand in final 
+a ajuns cadrul asteptat, este scris bufferul in fisier pana la ultimul frame pierdut, pentru a fi
+scris in ordine. Variabila frame_ack[no_of_frames] are acelasi rol ca si cea din sender.
+
+Ex: In cazul unei ferestre de dimensiune 8, vor fi trimise frame-urile 0 1 2 3 4 5 6 7, dupa care
+se asteapta confirmare pentru frame 0. Cand ACK 0 este primit de sender, este trimis frame-ul 8. 
+Cand ACK 1 este primit, este trimis frame-ul 9. Sa presupunem ca se pierd frame-urile 2,4,6. Cand
+senderul vede ca a primit alta confirmare decat cea asteptata(3 in loc de 2), nu mai trimite un nou
+frame, ci asteapta confirmarea pentru ultimul pachet trimis(in cazul nostru 9). Cand ajunge
+confirmarea pentru 9, senderul verifica de la frame-ul 1(sent-window_size+1) care cadre nu s-au trimis
+cu succes si le retrimite. Cand s-a primit confirmarea pentru 2, senderul va trimite frame-urile 10 si
+11 deoarece inca nu stie nimic despre 4, astfel mentinandu-se fereastra plina. Deci senderul va trimite
+un numar nou de cadre egal cu diferenta dintre numarul de secventa al primului frame despre care nu se
+stie nimic si frame-ul curent. Cand se primeste ACK 4, sunt trimise frame-urile 12 si 13. In cazul in
+care se intra in timeout, este retrimisa o intreaga fereasta pana la ultimul sent.
+
+
+Task 3
+
+Am folosit o alta structura, control_pkt, cu doua campuri in plus fata de structura folosita la task-urile
+precedente, char control_byte1 si control_byte2, care sunt folositi ca bytes de control. Folosesc doi bytes
+de control pentru ca se poate pierde maxim un byte din campul payload al structurii msg, deci sigur unul
+dintre ei va fi valid daca se corupe vreo unul.
+Functia getControlByte intoarce byte-ul de control al unei structuri control_pkt. Control_byte-ul este
+format facand XOR pe toti bytes din control_pkt, incepand cu primul. Initial cei doi control bytes sunt 0
+pentru a nu afecta cu absolut nimic operatia de XOR. Bitul 0 din control_byte e un bit de control al tuturor
+bitilor de pe pozitia 0 din toti bytes din structura control_pkt, bitul 1 pentru biti de pe pozitia 1 etc.
+Cand un frame ajunge la receiver, sunt verificati mai intai cei doi control_bytes. Daca nu sunt identici, am
+descoperit byte-ul corupt, deci nu mai este nevoie sa calculam byte-ul de control in receiver si nu este
+trimisa nicio confirmare la sender. In cazul in care cei doi bytes sunt identici(byte-ul de control
+a ajuns necorupt), este calculat un control_byte pentru frame-ul primit, avand control_bytes pusi pe 0 pentru
+a nu influenta operatia de XOR. In cazul in care ce am calulat corespunde cu ce am primit, este trimisa 
+confirmare la sender despre frame-ul curent, in caz contrat nu este trimisa nicio informatie. Mecanismul de 
+retransmisie este acelasi ca la task-ul 2, adica selective repeat.
+
+
+Motivul principal pentru care am intarziat cu tema este ca am avut o problema de aliniere, structura initiala
+pe care o foloseam avand cele 2 char-uri pe primele 2 pozitii si apoi cei 2 int si nu corespundeau dimensiuniule.
+
+
+
+	
