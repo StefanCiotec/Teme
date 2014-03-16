@@ -1,0 +1,126 @@
+*******************************************************************************
+			CIOTEC MARIAN-STEFAN 333CA
+*******************************************************************************
+				TEMA 4 APD
+			SIMULAREA UNEI RETELE IN MPI
+*******************************************************************************
+
+CONTINUT ARHIVA:
+	- sursa - tema4.c
+	- Makefile
+	- README
+	- fisiere intrare
+		- "top.in" "msg.in"
+		- "top2.in" "msg2.in"
+		
+	- Nume executabil creat in urma compilarii(make build) : tema4
+	- Mod rulare:
+		mpirun -np 6 ./tema4 top2.in msg2.in
+		mpirun -np 12 ./tema4 top.in msg.in
+
+DETALII IMPLEMENTARE:
+
+	
+	ETAPA 1:
+	Mod afisare:
+	Nodul 0 - afiseaza topologia si tabela de rutare in asocieri de forma
+	destinatie next_hop;
+	Toate celelalte noduri afiseaza doar tabela de rutare in asocieri de
+	forma destinatie next_hop;
+	Pentru a evita intercalarea output-ului la stdout am inclus un mic 
+	sleep(de 10 ms)
+	
+	Pentru comunicatia intre procese din etapa 1 am construit un nou tip
+	de date MPI - my_mpi_struct.
+	Stabilirea topologiei se bazeaza pe algoritmul cu mesaje de sondaj
+	cu ecou. Initiatorul este rank-ul 0 care trimite sonde pe toate
+	legaturile.Atunci cand un nod primeste sondaj, acesta retine nodul
+	de la care l-a primit(in variabila prim) si trimite sondajul pe
+	celelalte legaturi, apoi asteptand mesaje de ecou cu topologia
+	de la aceste noduri. 
+	Pentru evitarea buclelor, pentru toate sondajele in afara primului, se
+	trimite un mesaj de ecou cu topologia goala.
+	Tot in aceasta etapa, retin in variabilele no_cycle_nodes si 
+	*cycle_nodes informatii referitoare la arborele minim de acoperire.
+	Astfel, din arborele minim de acoperire fac parte toate nodurile
+	si legaturile pe care nu se primesc topologii nule.
+	In urma acestui pas, doar initiatorul(nodul 0), va avea imaginea
+	completa a topologiei. Acesta trimite printr-un broadcast topologia
+	si celorlalte noduri.
+	Variabila *visited din structura Message are rolul de a ajuta la
+	evitarea buclelor in cadrul mesajelor de broadcast. Astfel, cand un
+	nod trimite un mesaj, acesta marcheaza in visited rank-ul sau dar si
+	rank-urile nodurilor carora urmeaza sa le trimita. Astfel, nodurile
+	la care mesajul a ajuns vor vedea ca mesajul deja a fost trimis de
+	cineva la vecinul sau(in cazul in care exista un ciclu) si nu vor mai
+	trimite inca o data acest mesaj.
+	Calculul tabelei de rutare este facut cu algoritmul BFS. Astfel este
+	gasita cea mai scurta cale pana la orice nod de la nodul curent. In
+	tabela de rutare este retinut doar urmatorul hop.
+	In aceasta etapa sunt folosite numai send-uri si receive-uri blocante.
+	
+	
+	ETAPA 2:
+	Mod afisare:
+	Din cauza intercalarii outputului proceselor, outputul arata de forma:
+	
+	BROADCAST ID "nod_curent" "mesaj" from "nod_from" source "nod_sursa" 
+	-> inseamna cu nodul cu id-ul "nod_curent" a primit mesajul de 
+	broadcast "mesaj" cu sursa "nod_sursa" de la nodul "nod_from"
+	
+	INTER ID "nod_curent" "mesaj" from "nod_from" next_hop "nod_next_hop"
+	source "nod_sursa" to "nod_dest"
+	-> inseamna ca nodul cu id-ul "nod_curent" va ruta mesajul "mesaj"
+	cu sursa "nod_sursa" si destinatia "nod_dest" catre nodul cu id-ul
+	"nod_next_hop"
+	
+	DEST ID "nod_curent" "mesaj" from "nod_from" source "nod_sursa"
+	-> inseamna ca mesajul "mesaj" cu sursa "nod_sursa" primit de la 
+	"nod_from" a ajuns la destinatie("nod_curent")
+	
+	Comunicatia intre procese in aceasta etapa se face prin intermediul
+	unui alt tip de date MPI creat - my_info_struct;
+	In plus fata de structura de la etapa 1, aceasta mai retine sursa,
+	destinatia si payload-ul unui mesaj(mesajul efectiv);
+	Exista 4 tipuri de mesaje care pot fi interschimbate in aceasta etapa:
+	- START - mesaje pt initierea comunicarii
+	- BROADCAST - mesaje broadcast
+	- INFO - mesaje cu destinatie precisa care contin informatie
+	- FINAL - mesaje pentru terminarea comunicarii
+	Initierea comunicarii este facuta de toate nodurile prin trimiterea
+	unor mesaje broadcast de start. Acest pas este considerat complet
+	atunci cand fiecare proces a primit mesaje de start din partea tuturor
+	celorlalte procese. Trimiterea mesajelor se face cu send non-blocant.
+	Rutarea mesajelor se face pe baza tabelelor de rutare construite la
+	pasul anterior. Astfel cand un mesaj de tip INFO ajunge la un proces,
+	acesta verifica daca rank-ul sau coincide cu destinatia mesajului
+	(mesajul ii era destinat). Daca nu coincid, acesta verifica tabela
+	de rutare pentru a afla nodul caruia trebuie trimis mesajul pentru
+	a ajunge la destinatie. Comunicatia mesajelor broadcast se face ca la
+	pasul anterior.
+	Fiecare proces, dupa trimiterea tutoror mesajelor, trimite un mesaj
+	broadcast de tip final pentru a anunta incheierea comunicatiei.
+	Etapa este considerata incheiata atunci cand fiecare nod a primit
+	de la toate celelalte noduri in afara de el mesaje de final.
+	
+	
+	ETAPA 3:
+	Mod afisare:
+	"nod_curent" "lider" "lider_adjunct"
+	
+	Este implemntat un algoritm unda de tip arbore, pe baza arborelui
+	minim de acoperire deja aflat.
+	Criteriul dupa care este ales liderul este cel mai mic id dintre 
+	procese, iar cel dupa care este ales liderul adjunct este cel mai mic
+	id dintre procese dupa cel al liderului, adica cele mai mici doua
+	id-uri.
+	Procesle schimba intre ele un vector care contine id-urile tuturor
+	proceselor. Initial un proces isi cunoaste doar id-ul propriu.
+	La finalul acestui pas, fiecare nod va avea toate id-urile celorlalte
+	noduri. Vectorul de id-uri este sortat si sunt alesi ca lideri
+	procesele cu primele 2 id-uri.
+	
+	
+******************************************************************************* 
+	 
+	 
