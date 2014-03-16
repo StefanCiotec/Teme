@@ -1,0 +1,46 @@
+####################################################################
+			CIOTEC MARIAN-STEFAN 323CA
+				TEMA 3 PC
+####################################################################
+
+Descriere generala a implementarii:
+
+	Dupa conectarea clientului la server, acesta trimite
+	datele sale(nume si port pe care asculta conexiuni 
+	de la alti clienti) serverului, printr-o comanda
+	speciala LOG. Daca serverul a raspuns cu reject, clientul
+	inchide, in caz contrar ramane conectat la server pana
+	se deconecteaza el sau primeste KICK.
+	Pentru trimiterea mesajelor realizez o conexiune intre
+	clientii sursa si destinatie, iar dupa trimitere
+	conexiunea este inchisa.
+	Pentru trimiterea fisierelor clientii raman conectati
+	pana la finalul transferului sau pana unul dintre ei
+	se deconecteaza.
+	Atunci cand clientul primeste o comanda valida de la
+	tastatura si care necesita date suplimentare de la server,
+	aceasta este trimisa la server. Severul, in functie de
+	comanda primita, adauga la mesaj informatiile necesare
+	conexiunii cu destinatarul(ip si port, numai in cazul in
+	care exista), iar mesajul este trimis inapoi clientului
+	de la care la primit.
+	In cazul comenzii broadcast, sunt trecute toate informatiile
+	despre clienti intr-un singur mesaj, de aceea mesajul poate
+	ajunge chiar si la dimensiunea de aprox 4000 bytes.
+	In cazul in care se cer informatii serverului despre un client
+	care nu este logat, serverul informeaza clientul ca nu exista
+	destinatar.
+	Vectorul de structuri client este utilizat pentru a retine
+	informatii despre clientii conectati la server intr-un
+	anumit moment.
+	Functia findByName gaseste un client conectat la server dupa
+	numele acestuia.
+	Functia findBySocket gaseste un client conectat la server
+	dupa socket-ul prin care comunica cserverul.
+	Functia findFree gaseste o pozitie libera in vectorul de
+	structuri client din server.
+	Functia getCommand recunoaste o comanda si intoarce o 
+	valoare corespunzatoare.
+	
+########################################################################	
+	
